@@ -6,7 +6,7 @@ It can be installed as a crontab to delete all indices older than X days daily.
 import logging
 import argparse
 import elasticsearch
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger("ES")
 
@@ -44,7 +44,12 @@ def get_logstash_indices(es):
     logger.info("Getting logstash indices...")
     logstash_indices = [index for index in es.indices.status()['indices'] if index.startswith('logstash-')]
     logger.info("Got {} indices...".format(len(logstash_indices)))
-    return sorted(logstash_indices, key=lambda x: datetime.strptime(x, 'logstash-%Y.%m.%d'))
+    return logstash_indices
+
+def get_indices_older_than_x_days(indices, days):
+    delta = timedelta(days)
+    indices_bydate = {datetime.strptime(idx, 'logstash-%Y.%m.%d'): idx for idx in indices}
+    return [idx for idx_date, idx in indices_bydate.items() if datetime.now() - idx_date > delta]
 
 def delete_logstash_indices(es, indices_to_delete, delete):
     logger.info("Indices to be deleted : {}".format(", ".join(indices_to_delete)))
@@ -65,7 +70,7 @@ def main():
 
     logstash_indices = get_logstash_indices(es)
 
-    indices_to_delete = logstash_indices[:-args.keep]
+    indices_to_delete = get_indices_older_than_x_days(logstash_indices, args.keep)
 
     if indices_to_delete:
         delete_logstash_indices(es, indices_to_delete, args.delete)
